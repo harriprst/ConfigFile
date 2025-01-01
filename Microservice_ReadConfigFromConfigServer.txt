@@ -23,24 +23,20 @@ limits-service-qa.properties
 
 @EnableConfigServer (annotation needs to be added before @SpringBootApplication)
 
-pom.xml -> Spring web, dev tools, boot actutator, spring cloud config server
+pom.xml ->
+Spring web, dev tools, boot actutator, spring cloud config server
 
 application.properties ->
 spring.application.name=spring-cloud-config-server
 server.port= 8888
 spring.cloud.config.server.git.uri=file:///file path in foward slash
 
-
-
 http://localhost:8888/limits-service/default  (to access the webpage)
-
 localhost:8888/limits-service/{dev or qa} (to access the webpage, dev or qa files used to access different configuration file created in git server)
 
-
-
+=====================================================================================================================================================
 
 2. Limits microservice
-
 pom.xml -> Spring web, dev tools, boot actutator, spring cloud config server
 
 application.properties ->
@@ -52,14 +48,11 @@ spring.config.import = option:configserver:http://localhost:8888
 limits-service.minimum = 1
 limits-service.maximum = 2000
 
-
 @Component
 @ConfigurationProperties("limits-service")  (this needs to match with application.properties key)
 class Configuration{
-
-int minimum; (this needs to match with application.properties key)
-int maximum;(this needs to match with application.properties key)
-
+    int minimum; (this needs to match with application.properties key)
+    int maximum; (this needs to match with application.properties key)
 }
 
 @RestController
@@ -72,20 +65,17 @@ Configuration configuration;
 public Limits getLimits(){
 	return new Limits(configuration.getMinimum(),configuration.getMaximum());
 }
-
 }
-
+=================================================================================================================================================
 
 3. Currency exchange server
-
-pom.xml -> Spring web, dev tools, boot actutator, spring cloud config client
+pom.xml ->
+Spring web, dev tools, boot actutator, spring cloud config client
 
 application.properties ->
 spring.application.name=currency-exchange
 server.port= 8000
 spring.config.import = option:configserver:http://localhost:8888
-
-
 
 @RequestMapping
 class CurrencyConversionExchangeServer{
@@ -93,28 +83,21 @@ class CurrencyConversionExchangeServer{
 	@Autowired
 	private Environment environment;(core.env.Environment - package to give details about current microservice)
 
-
 	@RequestMapping("/currency-exchange/from/{from}/to/{to}")
 	public CurrencyExchange getCurrencyExchange(@PathVariable String from , @PathVariable String to){
 		return new CurrencyExchange(US,INR,10, environment.getProperty("local.server.port"));
 	}
-
-
 }
 
 localhost:8080/limits-service/default (to access the webpage)
-
 localhost:8080/limits-service/{dev or qa} (to access the webpage, dev or qa files used to access different configuration file created in git server)
-
-
 
 vm Arguements -Dserver.port= port number to start in different port number will be used in multiple instances.
 
-
+==========================================================================================================================================================
 
 
 3. Currency conversion server
-
 pom.xml -> Spring web, dev tools, boot actutator, spring cloud config client
 
 application.properties ->
@@ -122,14 +105,11 @@ spring.application.name=currency-conversion
 server.port= 8100
 spring.config.import = option:configserver:http://localhost:8888
 
-
-
 @RequestMapping
 class CurrencyExchangeServer{
 
 	@Autowired
 	private Environment environment;(core.env.Environment - package to give details about current microservice)
-
 
 	@RequestMapping("/currency-exchange/from/{from}/to/{to}/count/{count}")
 	public CurrencyConversion convertTheCurrency(@PathVariable String from , @PathVariable String to, @PathVariable Integer count){
@@ -142,10 +122,7 @@ class CurrencyExchangeServer{
 	CurrencyConversion currencyConversion = responseEntity.getBody();
 		return new CurrencyConversion(US,INR,10, environment.getProperty("local.server.port"));
 	}
-
-
 }
-
 
 
 4. FEIGN - Is used for inter microservice communication
@@ -174,28 +151,18 @@ CurrencyExchangeProxy currencyExchangeProxy;
 
  currencyExchangeProxy.getCurrencyConversionValue();
  
- 
- 
- 
- 
- 
- 
- 
+ =============================================================================================================================
 5.Naming Server
- 
- pom.xml -> Spring web, dev tools, boot actutator, eureka server
-
+pom.xml ->
+Spring web, dev tools, boot actutator, eureka server
 
 @EnableEurekaServer (annotation needs to be added below @springBootApplication)
 
 application.properties ->
 spring.application.name=naming-server
 server.port= 8761
-
 eureka.client.registry-with-eureka=false
 eureka.client.fetch-registry=false
-
-
 
 Connecting CurrencyConversion and CurrencyExchange service with naming server.
 
