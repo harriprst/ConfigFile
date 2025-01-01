@@ -1,0 +1,4 @@
+Limits Microservice - 8080,8081
+Spring Cloud Config server - 8888
+CurrencyConversionServer - 8100
+CurrencyConversionExchangeServer - 8000
