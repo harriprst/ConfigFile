@@ -1,0 +1,36 @@
+1. Limits microservice
+
+pom.xml -> Spring web, dev tools, boot actutator, spring cloud config client
+
+application.properties ->
+spring.application.name=limits.service
+spring.config.import = option:configserver:http://localhost:8888
+limits-service.minimum = 1
+limits-service.maximum = 2000
+
+
+@Component
+@ConfigurationProperties("limits-service")  (this needs to match with application.properties key)
+class Configuration{
+
+int minimum; (this needs to match with application.properties key)
+int maximum;(this needs to match with application.properties key)
+
+}
+
+@RestController
+class LimitController{
+
+@Autowired
+Configuration configuration;
+
+@GetMapping("/limits")
+public Limits getLimits(){
+	return new Limits(configuration.getMinimum(),configuration.getMaximum());
+}
+
+}
+
+
+
+

@@ -1,0 +1,324 @@
+Port Standardization
+
+Limits Microservice - 8080,8081
+Spring Cloud Config server - 8888
+CurrencyConversionServer - 8100
+CurrencyConversionExchangeServer - 8000
+ 
+0. Create Git configuration file
+
+mkdir git-localconfig-repo
+cd  git-localconfig-repo
+git init   (this will initialize empty git repository)
+limits-service.properties (add and commit the file with the configuration)
+limits-service-dev.properties
+limits-service-qa.properties
+
+
+
+
+
+
+1. Cloud config server
+
+@EnableConfigServer (annotation needs to be added before @SpringBootApplication)
+
+pom.xml -> Spring web, dev tools, boot actutator, spring cloud config server
+
+application.properties ->
+spring.application.name=spring-cloud-config-server
+server.port= 8888
+spring.cloud.config.server.git.uri=file:///file path in foward slash
+
+
+
+http://localhost:8888/limits-service/default  (to access the webpage)
+
+localhost:8888/limits-service/{dev or qa} (to access the webpage, dev or qa files used to access different configuration file created in git server)
+
+
+
+
+2. Limits microservice
+
+pom.xml -> Spring web, dev tools, boot actutator, spring cloud config server
+
+application.properties ->
+spring.application.name=limits-service
+spring.profile.active= qa (based on this parameter different config file will be accessed)
+spring.cloud.config.profile.active= qa (based on this parameter different config file will be accessed)
+spring.cloud.config.name=limits-service (this property is use to fetch the config file name)
+spring.config.import = option:configserver:http://localhost:8888
+limits-service.minimum = 1
+limits-service.maximum = 2000
+
+
+@Component
+@ConfigurationProperties("limits-service")  (this needs to match with application.properties key)
+class Configuration{
+
+int minimum; (this needs to match with application.properties key)
+int maximum;(this needs to match with application.properties key)
+
+}
+
+@RestController
+class LimitController{
+
+@Autowired
+Configuration configuration;
+
+@GetMapping("/limits")
+public Limits getLimits(){
+	return new Limits(configuration.getMinimum(),configuration.getMaximum());
+}
+
+}
+
+
+3. Currency exchange server
+
+pom.xml -> Spring web, dev tools, boot actutator, spring cloud config client
+
+application.properties ->
+spring.application.name=currency-exchange
+server.port= 8000
+spring.config.import = option:configserver:http://localhost:8888
+
+
+
+@RequestMapping
+class CurrencyConversionExchangeServer{
+
+	@Autowired
+	private Environment environment;(core.env.Environment - package to give details about current microservice)
+
+
+	@RequestMapping("/currency-exchange/from/{from}/to/{to}")
+	public CurrencyExchange getCurrencyExchange(@PathVariable String from , @PathVariable String to){
+		return new CurrencyExchange(US,INR,10, environment.getProperty("local.server.port"));
+	}
+
+
+}
+
+localhost:8080/limits-service/default (to access the webpage)
+
+localhost:8080/limits-service/{dev or qa} (to access the webpage, dev or qa files used to access different configuration file created in git server)
+
+
+
+vm Arguements -Dserver.port= port number to start in different port number will be used in multiple instances.
+
+
+
+
+3. Currency conversion server
+
+pom.xml -> Spring web, dev tools, boot actutator, spring cloud config client
+
+application.properties ->
+spring.application.name=currency-conversion
+server.port= 8100
+spring.config.import = option:configserver:http://localhost:8888
+
+
+
+@RequestMapping
+class CurrencyExchangeServer{
+
+	@Autowired
+	private Environment environment;(core.env.Environment - package to give details about current microservice)
+
+
+	@RequestMapping("/currency-exchange/from/{from}/to/{to}/count/{count}")
+	public CurrencyConversion convertTheCurrency(@PathVariable String from , @PathVariable String to, @PathVariable Integer count){
+	
+	HashMap<String,String> uriVariables = new HashMap();
+	uriVariables.put("from",from);
+	uriVariables.put("to",to);
+	ResponseEntity<CurrencyConversion> responseEntity = new RestTemplate().getForEntity("url",CurrencyConversion.class,uriVariables);
+	
+	CurrencyConversion currencyConversion = responseEntity.getBody();
+		return new CurrencyConversion(US,INR,10, environment.getProperty("local.server.port"));
+	}
+
+
+}
+
+
+
+4. FEIGN - Is used for inter microservice communication
+
+Below code needs to be added in CurrencyExchangeService
+
+pom - dependency needs to be added. (spring-cloud-started-openfeign)
+
+@EnableFeignClients (annotation needs to be added above @SpringBootApplication)
+
+@Feign(name="currency-exchange", url="localhost:8000")
+public interface CurrencyExchangeProxy {
+
+	@GetMapping("/api url")
+	getCurrencyConversionValue(@PathVariable String from , @PathVariable String to,){
+	
+	}
+
+}
+
+Below code needs to be added in CurrencyConversionService
+
+
+@Autowired
+CurrencyExchangeProxy currencyExchangeProxy;
+
+ currencyExchangeProxy.getCurrencyConversionValue();
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+5.Naming Server
+ 
+ pom.xml -> Spring web, dev tools, boot actutator, eureka server
+
+
+@EnableEurekaServer (annotation needs to be added below @springBootApplication)
+
+application.properties ->
+spring.application.name=naming-server
+server.port= 8761
+
+eureka.client.registry-with-eureka=false
+eureka.client.fetch-registry=false
+
+
+
+Connecting CurrencyConversion and CurrencyExchange service with naming server.
+
+In pom.xml -> eureka client needs to be added
+
+In application.properties -> eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka
+
+
+6. Load Balancing between - multiple microservice  -- url needs to be removed while calling feign client, 
+Feign will contact naming server and collect server details and connect automatically.
+This is called as client side load balancing
+
+Feign uses - eureka client (it internally has load balancer)
+
+
+
+@Feign(name="currency-exchange", url="localhost:8000")
+@Feign(name="currency-exchange")         
+
+
+
+7. API Gateway - for ratelimiting, authentication and authorization
+
+pom.xml - dev tools, actutator, discovery client, reactive gateway
+
+application.properties ->
+spring.application.name=api-gateway
+server.port= 8765
+eureka.client.serviceUrl.defaultZone=http://localhost:8761/eureka
+spring.cloud.gateway.discovery.locator.enabled=true
+spring.cloud.gateway.discovery.locator.lowerCaseServiceId=true(url can be in smaller case)
+
+ localhost:8765/{service-name found in eureja server}/url for microservices
+ 
+ 
+ 
+ 
+ 8. Adding routing and filters in api gateway & Logging(111 & 112 tutorial)
+ 
+ Below code is for routing and filter
+ @Configuration
+ public class ApiGatewayConfiguration{
+ 
+ @Bean
+ public RouteLocator gatewayRouter(RouteLocatorbuilder builder){
+ 
+		Function<PredicateSpec, Builable<Route>> routeFunction = p -> p.path("/get")
+																								.filters(f-> f.addRequestHeader("MyHeader","MyURI"))
+																								.uri("http://httpbin.org:80")
+ 
+		return builder.routes()
+		.route(routeFunction)
+		.route(p ->p.path("/currency-exchange/**").uri("lib://currency-exchange"))              --- this will call load balancer based on the route
+		.build();
+ }
+ 
+ }
+ 
+ 
+ Below code is for logging
+ 
+ 
+ @Component
+ 
+ public class LoggingFilter implements GlobalFilter{
+ 
+ private  Logger logger = LoggerFactory.getLogger(classname.class);
+ 
+ 
+ @Override
+ 
+public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain){
+		logger.info("Path of the request received -> {}", exchange.getRequest().getPath());
+		return chain.filter(exchange);
+	}
+ 
+ }
+ 
+ 
+ 9. Circuit breaker (Resilience4j)
+ 
+ 1. default values when one of the microservice is down
+ 2. default value to return without calling the microservice whent the service down.
+ 3. temorary failure
+ 4. ratelimiting`
+ 
+ Retry:
+ =====
+ pom.xml
+ - > start-aop and resilience4j-spring-boot2 dependency needs to be added
+ 
+1. default 3 times.
+ @Retry(name= "default")            --- retry will happen for 3 times if there is any failure
+ 
+ 
+ 2. based on configured value.
+ @Retry(name= "sample-api")
+  resilience4j.retry.instances.sample-api.maxAttempts=5 #NEW in application.properties
+   resilience4j.retry.instances.sample-api.waitDuration=5 
+ 
+ 3. adding fallback method
+ 
+  @Retry(name= "sample-api", fallbackMethod="hardcodedResponse")  -- fallbackMethod parameter needs to be added with method name and method needs to be created
+  
+  public String hardcodedResponse(Exception ex){
+  
+	return "fallback-response"; 
+  }
+ 
+ Circuit breaker:
+ ===========
+ 
+   @Circuitbreaker(name= "default", fallbackMethod="hardcodedResponse") 
+   
+   
+   watch command to fire more number of request
+   
+   watch -n 0.1 curl url
+ 
+ 10. Resilience4j - retry and fallback(115)
+ 
+ 
+ 
+ https://github.com/harriprst/CurrencyConversionServer
+ https://github.com/harriprst/CurrencyExchangeServer
+ https://github.com/harriprst/LimitService
